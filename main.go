@@ -4,7 +4,6 @@ import (
 	"bubbletea/test/shader"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -13,6 +12,10 @@ import (
 
 type model struct {
 	speed    int
+	mod1     float64
+	mod2     float64
+	mod3     float64
+	selected int
 	quitting bool
 	frame    int
 	text     string
@@ -37,6 +40,9 @@ func initialModel() model {
 			Width(2).
 			Height(1).
 			Background(lipgloss.Black),
+		mod1: 0.7,
+		mod2: 8.0,
+		mod3: 0.2,
 	}
 }
 
@@ -46,7 +52,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.text = ""
 		m.frame += m.speed + 1
 
-		image := shader.WrapSlice(shader.RenderFrame(float64(m.frame) * 0.05))
+		image := shader.WrapSlice(shader.RenderFrame(float64(m.frame)*0.05, m.mod1, m.mod2, m.mod3))
 
 		for _, column := range image {
 			m.text += "\n"
@@ -62,10 +68,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c", "esc":
 			m.quitting = true
 			return m, tea.Quit
+		case "right":
+			if m.selected < 3 {
+				m.selected++
+			}
+		case "left":
+			if m.selected > 0 {
+				m.selected--
+			}
 		case "up":
-			m.speed++
+			switch m.selected {
+			case 0:
+				m.speed++
+			case 1:
+				m.mod1 += 0.1
+			case 2:
+				m.mod2 += 0.5
+			case 3:
+				m.mod3 += 0.05
+			}
 		case "down":
-			m.speed--
+			switch m.selected {
+			case 0:
+				m.speed--
+			case 1:
+				m.mod1 -= 0.1
+			case 2:
+				m.mod2 -= 0.5
+			case 3:
+				m.mod3 -= 0.05
+			}
 		}
 	}
 	return m, nil
@@ -77,7 +109,24 @@ func (m model) View() tea.View {
 		return view
 	}
 
-	return tea.View{Content: m.text + "\n" + strconv.Itoa(m.speed)}
+	labels := []string{
+		fmt.Sprintf("speed: %d", m.speed),
+		fmt.Sprintf("mod1: %.2f", m.mod1),
+		fmt.Sprintf("mod2: %.2f", m.mod2),
+		fmt.Sprintf("mod3: %.2f", m.mod3),
+	}
+	status := ""
+	for i, l := range labels {
+		if i == m.selected {
+			status += "> " + l
+		} else {
+			status += "  " + l
+		}
+		if i < len(labels)-1 {
+			status += "  "
+		}
+	}
+	return tea.View{Content: m.text + "\n" + status}
 }
 
 func main() {

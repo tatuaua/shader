@@ -13,7 +13,12 @@ type RGB struct {
 }
 
 // RenderFrame computes a Width×Height frame for the given time t.
-func RenderFrame(t float64) []RGB {
+func RenderFrame(t, mod1, mod2, mod3 float64) []RGB {
+
+	// mod1 0.7
+	// mod2 8.0
+	// mod3 0.2
+
 	frame := make([]RGB, Width*Height)
 
 	rx, ry := float64(Width), float64(Height)
@@ -26,7 +31,7 @@ func RenderFrame(t float64) []RGB {
 			px := (fcx*2.0 - rx) / ry
 			py := (fcy*2.0 - ry) / ry
 
-			lval := math.Abs(0.7 - (px*px + py*py))
+			lval := math.Abs(mod1 - (px*px + py*py))
 
 			scale := (1.0 - lval) / 0.2
 			vx := px * scale
@@ -34,13 +39,13 @@ func RenderFrame(t float64) []RGB {
 
 			var o [4]float64
 
-			for i := 1.0; i <= 8.0; i++ {
-				dvx := math.Cos(vy*i+t)/i + 0.7
-				dvy := math.Cos(vx*i+i+t)/i + 0.7
+			for i := 1.0; i <= mod2; i++ {
+				dvx := math.Cos(vy*i+t)/i + mod1
+				dvy := math.Cos(vx*i+i+t)/i + mod1
 				vx += dvx
 				vy += dvy
 
-				s := math.Abs(vx-vy) * 0.2
+				s := math.Abs(vx-vy) * mod3
 				o[0] += (math.Sin(vx) + 1.0) * s
 				o[1] += (math.Sin(vy) + 1.0) * s
 				o[2] += (math.Sin(vy) + 1.0) * s
