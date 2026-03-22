@@ -12,19 +12,13 @@ type RGB struct {
 	R, G, B byte
 }
 
-// RenderFrame computes a Width×Height frame for the given time t.
-func RenderFrame(t, mod1, mod2, mod3 float64) []RGB {
-
-	// mod1 0.7
-	// mod2 8.0
-	// mod3 0.2
-
-	frame := make([]RGB, Width*Height)
-
+// RenderFrame computes a Width×Height frame for the given time t,
+// writing results into the provided framebuffer.
+func RenderFrame(t, mod1, mod2, mod3 float64, frame *[Height][Width]RGB) {
 	rx, ry := float64(Width), float64(Height)
 
-	for y := 0; y < Height; y++ {
-		for x := 0; x < Width; x++ {
+	for y := range Height {
+		for x := range Width {
 			fcx := float64(x) + 0.5
 			fcy := float64(Height-1-y) + 0.5
 
@@ -57,15 +51,13 @@ func RenderFrame(t, mod1, mod2, mod3 float64) []RGB {
 			o[1] = math.Tanh(math.Exp(py*-1.0) * el / o[1])
 			o[2] = math.Tanh(math.Exp(py*-2.0) * el / o[2])
 
-			frame[y*Width+x] = RGB{
+			frame[y][x] = RGB{
 				R: clampByte(o[0]),
 				G: clampByte(o[1]),
 				B: clampByte(o[2]),
 			}
 		}
 	}
-
-	return frame
 }
 
 func clampByte(v float64) byte {
@@ -78,11 +70,4 @@ func clampByte(v float64) byte {
 	return byte(v * 255)
 }
 
-// WrapSlice converts a flat []RGB into a 2D [Height][Width]RGB slice.
-func WrapSlice(flat []RGB) [][]RGB {
-	result := make([][]RGB, Height)
-	for y := 0; y < Height; y++ {
-		result[y] = flat[y*Width : (y+1)*Width]
-	}
-	return result
-}
+

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"runtime/pprof"
+	"strconv"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -11,15 +13,16 @@ import (
 )
 
 type model struct {
-	speed    int
-	mod1     float64
-	mod2     float64
-	mod3     float64
-	selected int
-	quitting bool
-	frame    int
-	text     string
-	style    lipgloss.Style
+	speed       int
+	mod1        float64
+	mod2        float64
+	mod3        float64
+	selected    int
+	quitting    bool
+	frameNum    int
+	text        string
+	style       lipgloss.Style
+	frameBuffer [Height][Width]RGB
 }
 
 type TickMsg time.Time
@@ -46,31 +49,37 @@ func initialModel() model {
 	}
 }
 
-func ColorText(r, g, b int) string {
-	coloredText := fmt.Sprintf("\033[48;2;%d;%d;%dm  \033[0m", r, g, b)
-	return coloredText
+func ColorText(text *strings.Builder, r, g, b int) {
+	text.WriteString("\033[48;2;")
+	text.Write(strconv.AppendUint(nil, uint64(r), 10))
+	text.WriteByte(';')
+	text.Write(strconv.AppendUint(nil, uint64(g), 10))
+	text.WriteByte(';')
+	text.Write(strconv.AppendUint(nil, uint64(b), 10))
+	text.WriteString("m  \033[0m")
 }
 
-func (m model) TextFromFrame(frame [][]RGB) string {
-	var text string
-	for _, column := range frame {
-		text += "\n"
-		for _, row := range column {
-			text += ColorText(int(row.R), int(row.G), int(row.B))
+func (m model) TextFromFrame(frame *[Height][Width]RGB) string {
+	var text strings.Builder
+	text.Grow(Height * Width * 24)
+	for y := range Height {
+		text.WriteByte('\n')
+		for x := range Width {
+			ColorText(&text, int(frame[y][x].R), int(frame[y][x].G), int(frame[y][x].B))
 		}
 	}
-	return text
+	return text.String()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case TickMsg:
 		m.text = ""
-		m.frame += m.speed + 1
+		m.frameNum += m.speed + 1
 
-		image := WrapSlice(RenderFrame(float64(m.frame)*0.05, m.mod1, m.mod2, m.mod3))
+		RenderFrame(float64(m.frameNum)*0.05, m.mod1, m.mod2, m.mod3, &m.frameBuffer)
 
-		m.text = m.TextFromFrame(image)
+		m.text = m.TextFromFrame(&m.frameBuffer)
 
 		return m, doTick()
 	case tea.KeyPressMsg:
@@ -136,7 +145,9 @@ func (m model) View() tea.View {
 			status += "  "
 		}
 	}
-	return tea.View{Content: m.text + "\n" + status}
+	v := tea.View{Content: m.text + "\n" + status}
+	v.AltScreen = true
+	return v
 }
 
 func main() {
