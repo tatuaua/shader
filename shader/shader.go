@@ -1,3 +1,4 @@
+// Package shader balls
 package shader
 
 import "math"
