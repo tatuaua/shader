@@ -62,7 +62,7 @@ func ColorText(text *strings.Builder, r, g, b int) {
 
 func (m model) TextFromFrame(frame *[Height][Width]RGB) string {
 	var text strings.Builder
-	text.Grow(Height * Width * 24)
+	text.Grow(Height * Width * 25)
 	for y := range Height {
 		text.WriteByte('\n')
 		for x := range Width {
