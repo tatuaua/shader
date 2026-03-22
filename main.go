@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bubbletea/test/shader"
 	"fmt"
 	"os"
+	"runtime/pprof"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -46,21 +46,31 @@ func initialModel() model {
 	}
 }
 
+func ColorText(r, g, b int) string {
+	coloredText := fmt.Sprintf("\033[48;2;%d;%d;%dm  \033[0m", r, g, b)
+	return coloredText
+}
+
+func (m model) TextFromFrame(frame [][]RGB) string {
+	var text string
+	for _, column := range frame {
+		text += "\n"
+		for _, row := range column {
+			text += ColorText(int(row.R), int(row.G), int(row.B))
+		}
+	}
+	return text
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case TickMsg:
 		m.text = ""
 		m.frame += m.speed + 1
 
-		image := shader.WrapSlice(shader.RenderFrame(float64(m.frame)*0.05, m.mod1, m.mod2, m.mod3))
+		image := WrapSlice(RenderFrame(float64(m.frame)*0.05, m.mod1, m.mod2, m.mod3))
 
-		for _, column := range image {
-			m.text += "\n"
-			for _, row := range column {
-				s := m.style.Background(lipgloss.RGBColor{R: row.R, G: row.G, B: row.B})
-				m.text += s.Render("")
-			}
-		}
+		m.text = m.TextFromFrame(image)
 
 		return m, doTick()
 	case tea.KeyPressMsg:
@@ -130,6 +140,9 @@ func (m model) View() tea.View {
 }
 
 func main() {
+	f, _ := os.Create("cpu.prof")
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 	if _, err := tea.NewProgram(initialModel()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "Urgh:", err)
 		os.Exit(1)

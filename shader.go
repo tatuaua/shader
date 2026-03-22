@@ -1,5 +1,4 @@
-// Package shader balls
-package shader
+package main
 
 import "math"
 
@@ -79,10 +78,11 @@ func clampByte(v float64) byte {
 	return byte(v * 255)
 }
 
+// WrapSlice converts a flat []RGB into a 2D [Height][Width]RGB slice.
 func WrapSlice(flat []RGB) [][]RGB {
-	grid := make([][]RGB, Height)
-	for i := range grid {
-		grid[i] = flat[i*Width : (i+1)*Width]
+	result := make([][]RGB, Height)
+	for y := 0; y < Height; y++ {
+		result[y] = flat[y*Width : (y+1)*Width]
 	}
-	return grid
+	return result
 }
