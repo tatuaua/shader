@@ -23,6 +23,7 @@ type model struct {
 	text        string
 	style       lipgloss.Style
 	frameBuffer [Height][Width]RGB
+	shader      int // 0 = RenderFrame, 1 = RenderFrame2
 }
 
 type TickMsg time.Time
@@ -77,7 +78,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.text = ""
 		m.frameNum += m.speed + 1
 
-		RenderFrame(float64(m.frameNum)*0.05, m.mod1, m.mod2, m.mod3, &m.frameBuffer)
+		switch m.shader {
+		case 0:
+			RenderFrame(float64(m.frameNum)*0.05, m.mod1, m.mod2, m.mod3, &m.frameBuffer)
+		case 1:
+			RenderFrame2(float64(m.frameNum)*0.05, &m.frameBuffer)
+		}
 
 		m.text = m.TextFromFrame(&m.frameBuffer)
 
@@ -87,6 +93,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c", "esc":
 			m.quitting = true
 			return m, tea.Quit
+		case "tab":
+			m.shader = (m.shader + 1) % 2
 		case "right":
 			if m.selected < 3 {
 				m.selected++
@@ -128,7 +136,9 @@ func (m model) View() tea.View {
 		return view
 	}
 
+	shaderName := []string{"shader1", "shader2"}[m.shader]
 	labels := []string{
+		fmt.Sprintf("shader: %s", shaderName),
 		fmt.Sprintf("speed: %d", m.speed),
 		fmt.Sprintf("mod1: %.2f", m.mod1),
 		fmt.Sprintf("mod2: %.2f", m.mod2),
