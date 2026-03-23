@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	Width  = 50
-	Height = 50
+	Width  = 100
+	Height = 100
 )
 
 // RGB holds a single pixel color.
@@ -83,66 +83,68 @@ func clampByte(v float64) byte {
 // writing results into the provided framebuffer.
 func RenderFrame2(t float64, frame *[Height][Width]RGB) {
 	rx, ry := float64(Width), float64(Height)
+
+	// Pre-compute frame-constant values
+	sinT0 := 4 * math.Sin(t)
+	sinT8 := 4 * math.Sin(t+8)
+	sinT4 := 4 * math.Sin(t+4)
+	tDiv02 := t / 0.2
+	dz := 1.0 - rx // fcz*2 - rx is constant (fcz = 0.5)
+
 	var wg sync.WaitGroup
 
 	for y := range Height {
 		wg.Add(1)
 		go func(row int) {
 			defer wg.Done()
-			for x := range Width {
-				fcx := float64(x) + 0.5
-				fcy := float64(Height-1-row) + 0.5
-				fcz := 0.5
+			dy := (float64(Height-1-row)+0.5)*2 - ry
+			dy2dz2 := dy*dy + dz*dz
 
-				// Normalize direction: normalize(FC.rgb*2 - r.xyy)
-				dx := fcx*2 - rx
-				dy := fcy*2 - ry
-				dz := fcz*2 - rx
-				dlen := math.Sqrt(dx*dx + dy*dy + dz*dz)
-				dx /= dlen
-				dy /= dlen
-				dz /= dlen
+			for x := range Width {
+				dx := (float64(x)+0.5)*2 - rx
+				dlen := math.Sqrt(dx*dx + dy2dz2)
+				ndx := dx / dlen
+				ndy := dy / dlen
+				ndz := dz / dlen
 
 				var o [4]float64
 				var z float64
 
 				for i := 0.0; i < 60; i++ {
-					// c = p = z * normalize(...)
-					cx, cy, cz := z*dx, z*dy, z*dz
+					cx, cy, cz := z*ndx, z*ndy, z*ndz
 					px, py, pz := cx, cy, cz
 
-					// p.z -= t / 0.2
-					pz -= t / 0.2
-					// c.z += 9
+					pz -= tDiv02
 					cz += 9
 
-					// Inner loop: accumulate sinusoidal displacement
+					// Compute l(cx, cy, cz, t) once (was called 22x per iteration)
+					lsx := cx + sinT0
+					lsy := cy + sinT8
+					lsz := cz + sinT4
+					lval := math.Sqrt(lsx*lsx + lsy*lsy + lsz*lsz)
+
+					// Pre-compute inner-loop invariant
+					base := z*0.2 + 1.0/lval
+
 					for f := 1.0; f <= 7; f++ {
-						sx := math.Sin(px*f+z*0.2+1/l(cx, cy, cz, t)) / f
-						sy := math.Sin(py*f+z*0.2+1/l(cx, cy, cz, t)) / f
-						sz := math.Sin(pz*f+z*0.2+1/l(cx, cy, cz, t)) / f
-						// p += sin(...).yzx / f
+						invF := 1.0 / f
+						sx := math.Sin(px*f+base) * invF
+						sy := math.Sin(py*f+base) * invF
+						sz := math.Sin(pz*f+base) * invF
 						px += sy
 						py += sz
 						pz += sx
 					}
 
-					// l = length(c + 4*sin(t + vec3(0,8,4)))
-					lval := l(cx, cy, cz, t)
-
-					// f = 8 - length((c+p).xy)
 					cpx := cx + px
 					cpy := cy + py
 					fval := 8 - math.Sqrt(cpx*cpx+cpy*cpy)
 
-					// min(max(f, -f*0.2), l)
 					minVal := math.Min(math.Max(fval, -fval*0.2), lval)
 
-					// z += f = 0.01 + minVal/7
 					step := 0.01 + minVal/7
 					z += step
 
-					// o += vec4(5,1,l,1) / l / l / f / z
 					if lval > 0.001 && step > 0.001 && z > 0.001 {
 						denom := lval * lval * step * z
 						o[0] += 5 / denom
@@ -152,7 +154,6 @@ func RenderFrame2(t float64, frame *[Height][Width]RGB) {
 					}
 				}
 
-				// o = tanh(o / 300)
 				o[0] = math.Tanh(o[0] / 300)
 				o[1] = math.Tanh(o[1] / 300)
 				o[2] = math.Tanh(o[2] / 300)
@@ -166,12 +167,4 @@ func RenderFrame2(t float64, frame *[Height][Width]RGB) {
 		}(y)
 	}
 	wg.Wait()
-}
-
-// l computes length(c + 4*sin(t + vec3(0,8,4)))
-func l(cx, cy, cz, t float64) float64 {
-	sx := cx + 4*math.Sin(t+0)
-	sy := cy + 4*math.Sin(t+8)
-	sz := cz + 4*math.Sin(t+4)
-	return math.Sqrt(sx*sx + sy*sy + sz*sz)
 }
