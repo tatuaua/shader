@@ -38,7 +38,7 @@ func RenderFrame(t, mod1, mod2, mod3 float64, frame *[Height][Width]RGB) {
 				vx := px * scale
 				vy := py * scale
 
-				var o [4]float64
+				var o [3]float64
 
 				for i := 1.0; i <= mod2; i++ {
 					dvx := math.Cos(vy*i+t)/i + mod1
@@ -50,7 +50,6 @@ func RenderFrame(t, mod1, mod2, mod3 float64, frame *[Height][Width]RGB) {
 					o[0] += (math.Sin(vx) + 1.0) * s
 					o[1] += (math.Sin(vy) + 1.0) * s
 					o[2] += (math.Sin(vy) + 1.0) * s
-					o[3] += (math.Sin(vx) + 1.0) * s
 				}
 
 				el := math.Exp(-4.0 * lval)
@@ -107,7 +106,7 @@ func RenderFrame2(t float64, frame *[Height][Width]RGB) {
 				ndy := dy / dlen
 				ndz := dz / dlen
 
-				var o [4]float64
+				var o [3]float64
 				var z float64
 
 				for i := 0.0; i < 60; i++ {
@@ -117,7 +116,7 @@ func RenderFrame2(t float64, frame *[Height][Width]RGB) {
 					pz -= tDiv02
 					cz += 9
 
-					// Compute l(cx, cy, cz, t) once (was called 22x per iteration)
+					// Compute l(cx, cy, cz, t) once
 					lsx := cx + sinT0
 					lsy := cy + sinT8
 					lsz := cz + sinT4
@@ -150,7 +149,6 @@ func RenderFrame2(t float64, frame *[Height][Width]RGB) {
 						o[0] += 5 / denom
 						o[1] += 1 / denom
 						o[2] += lval / denom
-						o[3] += 1 / denom
 					}
 				}
 
