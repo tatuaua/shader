@@ -3,13 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
-	"runtime/pprof"
 	"strconv"
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 type model struct {
@@ -20,10 +17,13 @@ type model struct {
 	selected    int
 	quitting    bool
 	frameNum    int
-	text        string
-	style       lipgloss.Style
+	text        []byte
 	frameBuffer [Height][Width]RGB
-	shader      int // 0 = RenderFrame, 1 = RenderFrame2
+
+	// FPS tracking
+	lastTick    time.Time
+	frameTimes  []time.Duration
+	totalFrames int
 }
 
 type TickMsg time.Time
@@ -40,52 +40,45 @@ func (m model) Init() tea.Cmd {
 
 func initialModel() model {
 	return model{
-		style: lipgloss.NewStyle().
-			Width(2).
-			Height(1).
-			Background(lipgloss.Black),
 		mod1: 0.7,
 		mod2: 8.0,
 		mod3: 0.2,
 	}
 }
 
-func ColorText(text *strings.Builder, r, g, b int) {
-	text.WriteString("\033[48;2;")
-	text.Write(strconv.AppendUint(nil, uint64(r), 10))
-	text.WriteByte(';')
-	text.Write(strconv.AppendUint(nil, uint64(g), 10))
-	text.WriteByte(';')
-	text.Write(strconv.AppendUint(nil, uint64(b), 10))
-	text.WriteString("m  \033[0m")
-}
-
-func (m model) TextFromFrame(frame *[Height][Width]RGB) string {
-	var text strings.Builder
-	text.Grow(Height * Width * 25)
+func TextFromFrame(buf []byte, frame *[Height][Width]RGB) []byte {
 	for y := range Height {
-		text.WriteByte('\n')
+		buf = append(buf, '\n')
 		for x := range Width {
-			ColorText(&text, int(frame[y][x].R), int(frame[y][x].G), int(frame[y][x].B))
+			buf = append(buf, "\033[48;2;"...)
+			buf = strconv.AppendUint(buf, uint64(frame[y][x].R), 10)
+			buf = append(buf, ';')
+			buf = strconv.AppendUint(buf, uint64(frame[y][x].G), 10)
+			buf = append(buf, ';')
+			buf = strconv.AppendUint(buf, uint64(frame[y][x].B), 10)
+			buf = append(buf, "m  \033[0m"...)
 		}
 	}
-	return text.String()
+	return buf
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case TickMsg:
-		m.text = ""
+		now := time.Time(msg)
+		if !m.lastTick.IsZero() {
+			dt := now.Sub(m.lastTick)
+			m.frameTimes = append(m.frameTimes, dt)
+			m.totalFrames++
+		}
+		m.lastTick = now
+
+		m.text = m.text[:0]
 		m.frameNum += m.speed + 1
 
-		switch m.shader {
-		case 0:
-			RenderFrame(float64(m.frameNum)*0.05, m.mod1, m.mod2, m.mod3, &m.frameBuffer)
-		case 1:
-			RenderFrame2(float64(m.frameNum)*0.05, &m.frameBuffer)
-		}
+		RenderFrame(float64(m.frameNum)*0.05, m.mod1, m.mod2, m.mod3, &m.frameBuffer)
 
-		m.text = m.TextFromFrame(&m.frameBuffer)
+		m.text = TextFromFrame(m.text, &m.frameBuffer)
 
 		return m, doTick()
 	case tea.KeyPressMsg:
@@ -93,8 +86,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c", "esc":
 			m.quitting = true
 			return m, tea.Quit
-		case "tab":
-			m.shader = (m.shader + 1) % 2
 		case "right":
 			if m.selected < 3 {
 				m.selected++
@@ -136,9 +127,7 @@ func (m model) View() tea.View {
 		return view
 	}
 
-	shaderName := []string{"shader1", "shader2"}[m.shader]
 	labels := []string{
-		fmt.Sprintf("shader: %s", shaderName),
 		fmt.Sprintf("speed: %d", m.speed),
 		fmt.Sprintf("mod1: %.2f", m.mod1),
 		fmt.Sprintf("mod2: %.2f", m.mod2),
@@ -155,17 +144,54 @@ func (m model) View() tea.View {
 			status += "  "
 		}
 	}
-	v := tea.View{Content: m.text + "\n" + status}
+	v := tea.View{Content: string(m.text) + "\n" + status}
 	v.AltScreen = true
 	return v
 }
 
 func main() {
-	f, _ := os.Create("cpu.prof")
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
-	if _, err := tea.NewProgram(initialModel()).Run(); err != nil {
+	//f, _ := os.Create("cpu.prof")
+	//pprof.StartCPUProfile(f)
+	//defer pprof.StopCPUProfile()
+	p := tea.NewProgram(initialModel())
+	finalModel, err := p.Run()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "Urgh:", err)
 		os.Exit(1)
+	}
+
+	m := finalModel.(model)
+	const skip = 60
+	if len(m.frameTimes) > skip*2 {
+		trimmed := m.frameTimes[skip : len(m.frameTimes)-skip]
+		var total time.Duration
+		var maxFrame time.Duration
+		for _, dt := range trimmed {
+			total += dt
+			if dt > maxFrame {
+				maxFrame = dt
+			}
+		}
+		avg := total / time.Duration(len(trimmed))
+		fps := float64(time.Second) / float64(avg)
+		target := time.Second / 60
+		lag := avg - target
+		if lag < 0 {
+			lag = 0
+		}
+		droppedFrames := 0
+		for _, dt := range trimmed {
+			if dt > target*2 {
+				droppedFrames++
+			}
+		}
+		fmt.Printf("\nFPS Stats (%d frames, skipped first/last %d):\n", len(trimmed), skip)
+		fmt.Printf("  avg fps:    %.1f\n", fps)
+		fmt.Printf("  avg frame:  %.2fms\n", float64(avg.Microseconds())/1000.0)
+		fmt.Printf("  worst:      %.2fms\n", float64(maxFrame.Microseconds())/1000.0)
+		fmt.Printf("  avg lag:    %.2fms\n", float64(lag.Microseconds())/1000.0)
+		fmt.Printf("  dropped:    %d (>2x target)\n", droppedFrames)
+	} else {
+		fmt.Printf("\nNot enough frames to report stats (need >%d, got %d)\n", skip*2, len(m.frameTimes))
 	}
 }
