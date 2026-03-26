@@ -29,8 +29,8 @@ type model struct {
 type TickMsg time.Time
 
 func doTick() tea.Cmd {
-	return tea.Tick(time.Second/60, func(t time.Time) tea.Msg {
-		return TickMsg(t)
+	return tea.Tick(time.Second/60, func(tick time.Time) tea.Msg {
+		return TickMsg(tick)
 	})
 }
 
@@ -47,15 +47,15 @@ func initialModel() model {
 }
 
 func TextFromFrame(buf []byte, frame *[Height][Width]RGB) []byte {
-	for y := range Height {
+	for row := range Height {
 		buf = append(buf, '\n')
-		for x := range Width {
+		for col := range Width {
 			buf = append(buf, "\033[48;2;"...)
-			buf = strconv.AppendUint(buf, uint64(frame[y][x].R), 10)
+			buf = strconv.AppendUint(buf, uint64(frame[row][col].R), 10)
 			buf = append(buf, ';')
-			buf = strconv.AppendUint(buf, uint64(frame[y][x].G), 10)
+			buf = strconv.AppendUint(buf, uint64(frame[row][col].G), 10)
 			buf = append(buf, ';')
-			buf = strconv.AppendUint(buf, uint64(frame[y][x].B), 10)
+			buf = strconv.AppendUint(buf, uint64(frame[row][col].B), 10)
 			buf = append(buf, "m  \033[0m"...)
 		}
 	}
@@ -134,36 +134,36 @@ func (m model) View() tea.View {
 		fmt.Sprintf("mod3: %.2f", m.mod3),
 	}
 	status := ""
-	for i, l := range labels {
-		if i == m.selected {
-			status += "> " + l
+	for idx, label := range labels {
+		if idx == m.selected {
+			status += "> " + label
 		} else {
-			status += "  " + l
+			status += "  " + label
 		}
-		if i < len(labels)-1 {
+		if idx < len(labels)-1 {
 			status += "  "
 		}
 	}
-	v := tea.View{Content: string(m.text) + "\n" + status}
-	v.AltScreen = true
-	return v
+	view = tea.View{Content: string(m.text) + "\n" + status}
+	view.AltScreen = true
+	return view
 }
 
 func main() {
 	//f, _ := os.Create("cpu.prof")
 	//pprof.StartCPUProfile(f)
 	//defer pprof.StopCPUProfile()
-	p := tea.NewProgram(initialModel())
-	finalModel, err := p.Run()
+	prog := tea.NewProgram(initialModel())
+	finalModel, err := prog.Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Urgh:", err)
 		os.Exit(1)
 	}
 
-	m := finalModel.(model)
+	result := finalModel.(model)
 	const skip = 60
-	if len(m.frameTimes) > skip*2 {
-		trimmed := m.frameTimes[skip : len(m.frameTimes)-skip]
+	if len(result.frameTimes) > skip*2 {
+		trimmed := result.frameTimes[skip : len(result.frameTimes)-skip]
 		var total time.Duration
 		var maxFrame time.Duration
 		for _, dt := range trimmed {
@@ -192,6 +192,6 @@ func main() {
 		fmt.Printf("  avg lag:    %.2fms\n", float64(lag.Microseconds())/1000.0)
 		fmt.Printf("  dropped:    %d (>2x target)\n", droppedFrames)
 	} else {
-		fmt.Printf("\nNot enough frames to report stats (need >%d, got %d)\n", skip*2, len(m.frameTimes))
+		fmt.Printf("\nNot enough frames to report stats (need >%d, got %d)\n", skip*2, len(result.frameTimes))
 	}
 }

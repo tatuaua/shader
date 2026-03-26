@@ -15,19 +15,19 @@ type RGB struct {
 	R, G, B byte
 }
 
-// RenderFrame computes a Width×Height frame for the given time t,
+// RenderFrame computes a Width×Height frame for the given elapsed time,
 // writing results into the provided framebuffer.
-func RenderFrame(t, mod1, mod2, mod3 float64, frame *[Height][Width]RGB) {
+func RenderFrame(elapsed, mod1, mod2, mod3 float64, frame *[Height][Width]RGB) {
 	rx, ry := float64(Width), float64(Height)
 	var wg sync.WaitGroup
 
-	for y := range Height {
+	for row := range Height {
 		wg.Add(1)
-		go func(row int) {
+		go func() {
 			defer wg.Done()
-			for x := range Width {
-				fcx := float64(x) + 0.5
-				fcy := float64(Height-1-y) + 0.5
+			for col := range Width {
+				fcx := float64(col) + 0.5
+				fcy := float64(Height-1-row) + 0.5
 
 				px := (fcx*2.0 - rx) / ry
 				py := (fcy*2.0 - ry) / ry
@@ -38,42 +38,42 @@ func RenderFrame(t, mod1, mod2, mod3 float64, frame *[Height][Width]RGB) {
 				vx := px * scale
 				vy := py * scale
 
-				var o [3]float64
+				var channels [3]float64
 
-				for i := 1.0; i <= mod2; i++ {
-					dvx := math.Cos(vy*i+t)/i + mod1
-					dvy := math.Cos(vx*i+i+t)/i + mod1
+				for iter := 1.0; iter <= mod2; iter++ {
+					dvx := math.Cos(vy*iter+elapsed)/iter + mod1
+					dvy := math.Cos(vx*iter+iter+elapsed)/iter + mod1
 					vx += dvx
 					vy += dvy
 
-					s := math.Abs(vx-vy) * mod3
-					o[0] += (math.Sin(vx) + 1.0) * s
-					o[1] += (math.Sin(vy) + 1.0) * s
-					o[2] += (math.Sin(vy) + 1.0) * s
+					brightness := math.Abs(vx-vy) * mod3
+					channels[0] += (math.Sin(vx) + 1.0) * brightness
+					channels[1] += (math.Sin(vy) + 1.0) * brightness
+					channels[2] += (math.Sin(vy) + 1.0) * brightness
 				}
 
 				el := math.Exp(-4.0 * lval)
-				o[0] = math.Tanh(math.Exp(py*1.0) * el / o[0])
-				o[1] = math.Tanh(math.Exp(py*-1.0) * el / o[1])
-				o[2] = math.Tanh(math.Exp(py*-2.0) * el / o[2])
+				channels[0] = math.Tanh(math.Exp(py*1.0) * el / channels[0])
+				channels[1] = math.Tanh(math.Exp(py*-1.0) * el / channels[1])
+				channels[2] = math.Tanh(math.Exp(py*-2.0) * el / channels[2])
 
-				frame[y][x] = RGB{
-					R: clampByte(o[0]),
-					G: clampByte(o[1]),
-					B: clampByte(o[2]),
+				frame[row][col] = RGB{
+					R: clampByte(channels[0]),
+					G: clampByte(channels[1]),
+					B: clampByte(channels[2]),
 				}
 			}
-		}(y)
+		}()
 	}
 	wg.Wait()
 }
 
-func clampByte(v float64) byte {
-	if v < 0 {
-		v = 0
+func clampByte(val float64) byte {
+	if val < 0 {
+		val = 0
 	}
-	if v > 1 {
-		v = 1
+	if val > 1 {
+		val = 1
 	}
-	return byte(v * 255)
+	return byte(val * 255)
 }
