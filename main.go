@@ -122,8 +122,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
+	var view tea.View
 	if m.quitting {
-		return tea.View{}
+		return view
 	}
 
 	labels := []string{
@@ -143,7 +144,7 @@ func (m model) View() tea.View {
 			status += "  "
 		}
 	}
-	view := tea.View{Content: string(m.text) + "\n" + status}
+	view = tea.View{Content: string(m.text) + "\n" + status}
 	view.AltScreen = true
 	return view
 }
